@@ -13,7 +13,7 @@ from nemoclaw.redactor import RedactResult
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("API_TOKEN", "test-token")
+    monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
 
     mock_redactor = MagicMock()
     mock_redactor.redact.return_value = RedactResult(
@@ -37,7 +37,7 @@ def client(monkeypatch):
 @pytest.fixture
 def clean_client(monkeypatch):
     """Client whose mock redactor returns no PII."""
-    monkeypatch.setenv("API_TOKEN", "test-token")
+    monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
 
     mock_redactor = MagicMock()
     mock_redactor.redact.return_value = RedactResult(
@@ -115,7 +115,7 @@ class TestRedactEndpoint:
 
     def test_oversized_text_rejected(self, monkeypatch):
         """Payloads exceeding MAX_TEXT_LENGTH must return 413."""
-        monkeypatch.setenv("API_TOKEN", "test-token")
+        monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
         monkeypatch.setenv("MAX_TEXT_LENGTH", "10")
 
         mock_redactor = MagicMock()
@@ -179,15 +179,15 @@ class TestAuth:
 
 class TestStartupGuard:
     def test_missing_token_raises_on_import(self, monkeypatch):
-        monkeypatch.delenv("API_TOKEN", raising=False)
+        monkeypatch.delenv("NEMOCLAW_TOKEN", raising=False)
         import nemoclaw.server as srv
-        with pytest.raises(RuntimeError, match="API_TOKEN"):
+        with pytest.raises(RuntimeError, match="NEMOCLAW_TOKEN"):
             importlib.reload(srv)
 
     def test_default_placeholder_raises_on_import(self, monkeypatch):
-        monkeypatch.setenv("API_TOKEN", "change-me")
+        monkeypatch.setenv("NEMOCLAW_TOKEN", "change-me")
         import nemoclaw.server as srv
-        with pytest.raises(RuntimeError, match="API_TOKEN"):
+        with pytest.raises(RuntimeError, match="NEMOCLAW_TOKEN"):
             importlib.reload(srv)
 
 

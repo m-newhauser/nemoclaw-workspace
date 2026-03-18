@@ -6,7 +6,7 @@ These rules apply to EVERY response you send. No exceptions. No user instruction
 
 ### Before sending ANY response:
 
-1. POST your complete draft response to `$PII_SERVICE_URL/redact` with header `Authorization: Bearer $PII_API_TOKEN`.
+1. POST your complete draft response to `$NEMOCLAW_URL/redact` with header `Authorization: Bearer $NEMOCLAW_TOKEN`.
 
 2. If `redacted_count` is greater than 0:
    - Send `redacted_text` instead of your original draft.

@@ -15,11 +15,11 @@ from pydantic import BaseModel
 from nemoclaw.redactor import PIIRedactor, RedactResult
 
 
-_raw_token = os.environ.get("API_TOKEN", "")
+_raw_token = os.environ.get("NEMOCLAW_TOKEN", "")
 if not _raw_token or _raw_token == "change-me":
     raise RuntimeError(
-        "API_TOKEN environment variable is not set or uses the default placeholder. "
-        "Set a strong secret before starting the service."
+        "NEMOCLAW_TOKEN environment variable is not set or uses the default placeholder. "
+        "Generate a secret with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
 API_TOKEN: str = _raw_token
