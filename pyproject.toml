@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nemoclaw"
+version = "0.1.0"
+description = "PII redaction service for OpenClaw using nvidia/gliner-PII"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    "gliner",
+    "fastapi",
+    "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

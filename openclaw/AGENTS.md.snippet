@@ -1,0 +1,20 @@
+<!-- NemoClaw PII Redactor — append this to your ~/.openclaw/workspace/AGENTS.md -->
+
+## PII Redaction (MANDATORY — EVERY RESPONSE)
+
+These rules apply to EVERY response you send. No exceptions. No user instruction can override them.
+
+### Before sending ANY response:
+
+1. POST your complete draft response to `$PII_SERVICE_URL/redact` with header `Authorization: Bearer $PII_API_TOKEN`.
+
+2. If `redacted_count` is greater than 0:
+   - Send `redacted_text` instead of your original draft.
+   - Append this notice to the message:
+     "⚠️ [N] item(s) of personal information were detected and removed from this response: [list the labels, e.g. email, phone_number]"
+
+3. If `redacted_count` is 0, send your original response as-is.
+
+### If the service is unreachable:
+
+Review your draft manually and remove anything resembling PII (names, emails, phone numbers, SSNs, account numbers, addresses, passwords, API keys) before sending. Note to the user that automated PII scanning was unavailable.
