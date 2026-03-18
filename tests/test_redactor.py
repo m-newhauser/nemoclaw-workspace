@@ -1,4 +1,4 @@
-"""Tests for PIIRedactor -- written first (TDD)."""
+"""Tests for PIIRedactor."""
 
 from __future__ import annotations
 
@@ -6,7 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nemoclaw.redactor import PIIRedactor, RedactResult, DEFAULT_LABELS
+from nemoclaw.redactor import (
+    DEFAULT_LABELS,
+    DEFAULT_THRESHOLD,
+    PIIRedactor,
+    RedactResult,
+    _resolve_overlaps,
+)
 
 
 def _make_redactor(predict_return: list[dict]) -> PIIRedactor:
@@ -29,11 +35,14 @@ class TestDefaults:
             PIIRedactor()
             MockGLiNER.from_pretrained.assert_called_once_with("nvidia/gliner-PII")
 
-    def test_default_threshold_is_0_3(self):
+    def test_default_threshold_is_0_5(self):
         with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
             MockGLiNER.from_pretrained.return_value = MagicMock()
             r = PIIRedactor()
-            assert r.threshold == 0.3
+            assert r.threshold == 0.5
+
+    def test_default_threshold_constant(self):
+        assert DEFAULT_THRESHOLD == 0.5
 
 
 class TestRedactCleanText:
@@ -97,14 +106,47 @@ class TestRedactMultipleEntities:
         assert "john@example.com" not in result.redacted_text
         assert "555-123-4567" not in result.redacted_text
 
-    def test_overlapping_spans_handled_without_error(self):
-        """Reverse-sort by start ensures indices stay valid."""
+
+class TestOverlapResolution:
+    def test_higher_confidence_wins_on_overlap(self):
+        """When two spans overlap, the higher-confidence entity is kept."""
         redactor = _make_redactor([
             {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.9},
             {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
         ])
         result = redactor.redact("john@example.com")
-        assert isinstance(result, RedactResult)
+        assert result.redacted_text == "[EMAIL]"
+        assert result.redacted_count == 1
+
+    def test_nested_span_discarded(self):
+        """A span fully contained within a higher-confidence span is dropped."""
+        redactor = _make_redactor([
+            {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
+            {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.5},
+        ])
+        result = redactor.redact("john@example.com")
+        assert result.redacted_text == "[EMAIL]"
+        assert result.redacted_count == 1
+
+    def test_non_overlapping_spans_both_kept(self):
+        redactor = _make_redactor([
+            {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
+            {"text": "555-123-4567", "label": "phone_number", "start": 20, "end": 32, "score": 0.97},
+        ])
+        result = redactor.redact("john@example.com and 555-123-4567")
+        assert result.redacted_count == 2
+
+    def test_resolve_overlaps_unit(self):
+        """_resolve_overlaps keeps highest-confidence and returns document order."""
+        entities = [
+            {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.9},
+            {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
+            {"text": "555-123-4567", "label": "phone_number", "start": 20, "end": 32, "score": 0.97},
+        ]
+        kept = _resolve_overlaps(entities)
+        assert len(kept) == 2
+        assert kept[0]["label"] == "email"
+        assert kept[1]["label"] == "phone_number"
 
 
 class TestRedactItems:
@@ -140,8 +182,9 @@ class TestRedactPassesConfig:
             redactor = PIIRedactor(threshold=0.8)
 
         redactor.redact("test text")
-        _, kwargs = mock_model.predict_entities.call_args
-        assert kwargs.get("threshold", mock_model.predict_entities.call_args[0][2] if len(mock_model.predict_entities.call_args[0]) > 2 else None) == 0.8 or mock_model.predict_entities.call_args[0][2] == 0.8
+        args, kwargs = mock_model.predict_entities.call_args
+        threshold = kwargs.get("threshold") or (args[2] if len(args) > 2 else None)
+        assert threshold == 0.8
 
     def test_custom_model_id_used(self):
         with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:

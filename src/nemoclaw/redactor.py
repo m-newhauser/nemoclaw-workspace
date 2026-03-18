@@ -8,7 +8,7 @@ from gliner import GLiNER
 
 
 DEFAULT_MODEL_ID = "nvidia/gliner-PII"
-DEFAULT_THRESHOLD = 0.3
+DEFAULT_THRESHOLD = 0.5
 
 DEFAULT_LABELS: list[str] = [
     "email",
@@ -36,6 +36,17 @@ class RedactResult:
     redacted_items: list[dict] = field(default_factory=list)
 
 
+def _resolve_overlaps(entities: list[dict]) -> list[dict]:
+    """Remove overlapping spans, keeping the highest-confidence entity per region."""
+    sorted_by_conf = sorted(entities, key=lambda e: e["score"], reverse=True)
+    kept: list[dict] = []
+    for ent in sorted_by_conf:
+        if any(ent["start"] < k["end"] and ent["end"] > k["start"] for k in kept):
+            continue
+        kept.append(ent)
+    return sorted(kept, key=lambda e: e["start"])
+
+
 class PIIRedactor:
     def __init__(
         self,
@@ -49,30 +60,32 @@ class PIIRedactor:
 
     def redact(self, text: str) -> RedactResult:
         """Detect PII in text and replace each span with [LABEL_UPPER]."""
-        entities = self._model.predict_entities(text, self.labels, threshold=self.threshold)
+        raw_entities = self._model.predict_entities(text, self.labels, threshold=self.threshold)
+        entities = _resolve_overlaps(raw_entities)
 
-        # Sort ascending by start for redacted_items (document order),
-        # but process in reverse order so replacements don't shift indices.
-        sorted_asc = sorted(entities, key=lambda e: e["start"])
-        sorted_desc = sorted(entities, key=lambda e: e["start"], reverse=True)
+        # Single-pass left-to-right reconstruction — O(n+m), no index-shift bugs.
+        parts: list[str] = []
+        cursor = 0
+        redacted_items: list[dict] = []
 
-        redacted = text
-        for ent in sorted_desc:
+        for ent in entities:
+            parts.append(text[cursor : ent["start"]])
             placeholder = f"[{ent['label'].upper()}]"
-            redacted = redacted[: ent["start"]] + placeholder + redacted[ent["end"] :]
+            parts.append(placeholder)
+            cursor = ent["end"]
+            redacted_items.append(
+                {
+                    "original": text[ent["start"] : ent["end"]],
+                    "label": ent["label"],
+                    "replacement": placeholder,
+                    "confidence": ent["score"],
+                }
+            )
 
-        redacted_items = [
-            {
-                "original": ent["text"],
-                "label": ent["label"],
-                "replacement": f"[{ent['label'].upper()}]",
-                "confidence": ent["score"],
-            }
-            for ent in sorted_asc
-        ]
+        parts.append(text[cursor:])
 
         return RedactResult(
-            redacted_text=redacted,
+            redacted_text="".join(parts),
             redacted_count=len(entities),
             redacted_items=redacted_items,
         )

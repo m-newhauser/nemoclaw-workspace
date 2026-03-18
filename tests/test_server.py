@@ -1,7 +1,8 @@
-"""Tests for the FastAPI server -- written first (TDD)."""
+"""Tests for the FastAPI server."""
 
 from __future__ import annotations
 
+import importlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,7 +28,25 @@ def client(monkeypatch):
     )
 
     with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
-        import importlib
+        import nemoclaw.server as srv
+        importlib.reload(srv)
+        with TestClient(srv.app) as tc:
+            yield tc
+
+
+@pytest.fixture
+def clean_client(monkeypatch):
+    """Client whose mock redactor returns no PII."""
+    monkeypatch.setenv("API_TOKEN", "test-token")
+
+    mock_redactor = MagicMock()
+    mock_redactor.redact.return_value = RedactResult(
+        redacted_text="Hello world",
+        redacted_count=0,
+        redacted_items=[],
+    )
+
+    with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
         import nemoclaw.server as srv
         importlib.reload(srv)
         with TestClient(srv.app) as tc:
@@ -81,6 +100,60 @@ class TestRedactEndpoint:
         )
         assert resp.json()["redacted_count"] == 1
 
+    def test_empty_text_short_circuits(self, clean_client):
+        """Empty text must return immediately without calling the model."""
+        resp = clean_client.post(
+            "/redact",
+            json={"text": ""},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["redacted_text"] == ""
+        assert data["redacted_count"] == 0
+        assert data["redacted_items"] == []
+
+    def test_oversized_text_rejected(self, monkeypatch):
+        """Payloads exceeding MAX_TEXT_LENGTH must return 413."""
+        monkeypatch.setenv("API_TOKEN", "test-token")
+        monkeypatch.setenv("MAX_TEXT_LENGTH", "10")
+
+        mock_redactor = MagicMock()
+        mock_redactor.redact.return_value = RedactResult("", 0, [])
+
+        with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
+            import nemoclaw.server as srv
+            importlib.reload(srv)
+            with TestClient(srv.app) as tc:
+                resp = tc.post(
+                    "/redact",
+                    json={"text": "x" * 11},
+                    headers={"Authorization": "Bearer test-token"},
+                )
+        assert resp.status_code == 413
+
+
+class TestOriginalField:
+    def test_original_omitted_by_default(self, client):
+        resp = client.post(
+            "/redact",
+            json={"text": "Contact john@example.com"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        items = resp.json()["redacted_items"]
+        assert len(items) == 1
+        assert items[0].get("original") is None
+
+    def test_original_included_when_requested(self, client):
+        resp = client.post(
+            "/redact?include_original=true",
+            json={"text": "Contact john@example.com"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        items = resp.json()["redacted_items"]
+        assert len(items) == 1
+        assert items[0]["original"] == "john@example.com"
+
 
 class TestAuth:
     def test_missing_auth_rejected(self, client):
@@ -102,6 +175,20 @@ class TestAuth:
             headers={"Authorization": "Bearer test-token"},
         )
         assert resp.status_code == 200
+
+
+class TestStartupGuard:
+    def test_missing_token_raises_on_import(self, monkeypatch):
+        monkeypatch.delenv("API_TOKEN", raising=False)
+        import nemoclaw.server as srv
+        with pytest.raises(RuntimeError, match="API_TOKEN"):
+            importlib.reload(srv)
+
+    def test_default_placeholder_raises_on_import(self, monkeypatch):
+        monkeypatch.setenv("API_TOKEN", "change-me")
+        import nemoclaw.server as srv
+        with pytest.raises(RuntimeError, match="API_TOKEN"):
+            importlib.reload(srv)
 
 
 class TestValidation:
