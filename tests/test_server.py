@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from nemoclaw.redactor import RedactResult
+from clawguard.redactor import RedactResult
 
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
+    monkeypatch.setenv("CLAWGUARD_TOKEN", "test-token")
 
     mock_redactor = MagicMock()
     mock_redactor.redact.return_value = RedactResult(
@@ -27,8 +27,8 @@ def client(monkeypatch):
         }],
     )
 
-    with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
-        import nemoclaw.server as srv
+    with patch("clawguard.server.PIIRedactor", return_value=mock_redactor):
+        import clawguard.server as srv
         importlib.reload(srv)
         with TestClient(srv.app) as tc:
             yield tc
@@ -37,7 +37,7 @@ def client(monkeypatch):
 @pytest.fixture
 def clean_client(monkeypatch):
     """Client whose mock redactor returns no PII."""
-    monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
+    monkeypatch.setenv("CLAWGUARD_TOKEN", "test-token")
 
     mock_redactor = MagicMock()
     mock_redactor.redact.return_value = RedactResult(
@@ -46,8 +46,8 @@ def clean_client(monkeypatch):
         redacted_items=[],
     )
 
-    with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
-        import nemoclaw.server as srv
+    with patch("clawguard.server.PIIRedactor", return_value=mock_redactor):
+        import clawguard.server as srv
         importlib.reload(srv)
         with TestClient(srv.app) as tc:
             yield tc
@@ -101,7 +101,6 @@ class TestRedactEndpoint:
         assert resp.json()["redacted_count"] == 1
 
     def test_empty_text_short_circuits(self, clean_client):
-        """Empty text must return immediately without calling the model."""
         resp = clean_client.post(
             "/redact",
             json={"text": ""},
@@ -114,15 +113,14 @@ class TestRedactEndpoint:
         assert data["redacted_items"] == []
 
     def test_oversized_text_rejected(self, monkeypatch):
-        """Payloads exceeding MAX_TEXT_LENGTH must return 413."""
-        monkeypatch.setenv("NEMOCLAW_TOKEN", "test-token")
+        monkeypatch.setenv("CLAWGUARD_TOKEN", "test-token")
         monkeypatch.setenv("MAX_TEXT_LENGTH", "10")
 
         mock_redactor = MagicMock()
         mock_redactor.redact.return_value = RedactResult("", 0, [])
 
-        with patch("nemoclaw.server.PIIRedactor", return_value=mock_redactor):
-            import nemoclaw.server as srv
+        with patch("clawguard.server.PIIRedactor", return_value=mock_redactor):
+            import clawguard.server as srv
             importlib.reload(srv)
             with TestClient(srv.app) as tc:
                 resp = tc.post(
@@ -179,15 +177,15 @@ class TestAuth:
 
 class TestStartupGuard:
     def test_missing_token_raises_on_import(self, monkeypatch):
-        monkeypatch.delenv("NEMOCLAW_TOKEN", raising=False)
-        import nemoclaw.server as srv
-        with pytest.raises(RuntimeError, match="NEMOCLAW_TOKEN"):
+        monkeypatch.delenv("CLAWGUARD_TOKEN", raising=False)
+        import clawguard.server as srv
+        with pytest.raises(RuntimeError, match="CLAWGUARD_TOKEN"):
             importlib.reload(srv)
 
     def test_default_placeholder_raises_on_import(self, monkeypatch):
-        monkeypatch.setenv("NEMOCLAW_TOKEN", "change-me")
-        import nemoclaw.server as srv
-        with pytest.raises(RuntimeError, match="NEMOCLAW_TOKEN"):
+        monkeypatch.setenv("CLAWGUARD_TOKEN", "change-me")
+        import clawguard.server as srv
+        with pytest.raises(RuntimeError, match="CLAWGUARD_TOKEN"):
             importlib.reload(srv)
 
 

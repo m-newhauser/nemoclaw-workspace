@@ -12,13 +12,13 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from nemoclaw.redactor import PIIRedactor, RedactResult
+from clawguard.redactor import PIIRedactor, RedactResult
 
 
-_raw_token = os.environ.get("NEMOCLAW_TOKEN", "")
+_raw_token = os.environ.get("CLAWGUARD_TOKEN", "")
 if not _raw_token or _raw_token == "change-me":
     raise RuntimeError(
-        "NEMOCLAW_TOKEN environment variable is not set or uses the default placeholder. "
+        "CLAWGUARD_TOKEN environment variable is not set or uses the default placeholder. "
         "Generate a secret with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="NemoClaw PII Redaction Service", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="ClawGuard PII Redaction Service", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")

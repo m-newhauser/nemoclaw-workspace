@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nemoclaw.redactor import (
+from clawguard.redactor import (
     DEFAULT_LABELS,
     DEFAULT_THRESHOLD,
     PIIRedactor,
@@ -16,7 +16,7 @@ from nemoclaw.redactor import (
 
 
 def _make_redactor(predict_return: list[dict]) -> PIIRedactor:
-    with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
+    with patch("clawguard.redactor.GLiNER") as MockGLiNER:
         mock_model = MagicMock()
         MockGLiNER.from_pretrained.return_value = mock_model
         mock_model.predict_entities.return_value = predict_return
@@ -30,13 +30,13 @@ class TestDefaults:
         assert len(DEFAULT_LABELS) > 0
 
     def test_loads_nvidia_model_by_default(self):
-        with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
+        with patch("clawguard.redactor.GLiNER") as MockGLiNER:
             MockGLiNER.from_pretrained.return_value = MagicMock()
             PIIRedactor()
             MockGLiNER.from_pretrained.assert_called_once_with("nvidia/gliner-PII")
 
     def test_default_threshold_is_0_5(self):
-        with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
+        with patch("clawguard.redactor.GLiNER") as MockGLiNER:
             MockGLiNER.from_pretrained.return_value = MagicMock()
             r = PIIRedactor()
             assert r.threshold == 0.5
@@ -109,7 +109,6 @@ class TestRedactMultipleEntities:
 
 class TestOverlapResolution:
     def test_higher_confidence_wins_on_overlap(self):
-        """When two spans overlap, the higher-confidence entity is kept."""
         redactor = _make_redactor([
             {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.9},
             {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
@@ -119,7 +118,6 @@ class TestOverlapResolution:
         assert result.redacted_count == 1
 
     def test_nested_span_discarded(self):
-        """A span fully contained within a higher-confidence span is dropped."""
         redactor = _make_redactor([
             {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
             {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.5},
@@ -137,7 +135,6 @@ class TestOverlapResolution:
         assert result.redacted_count == 2
 
     def test_resolve_overlaps_unit(self):
-        """_resolve_overlaps keeps highest-confidence and returns document order."""
         entities = [
             {"text": "john", "label": "user_name", "start": 0, "end": 4, "score": 0.9},
             {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
@@ -163,7 +160,6 @@ class TestRedactItems:
         assert item["confidence"] == 0.99
 
     def test_redacted_items_ordered_by_appearance(self):
-        """Items should appear in document order (left to right) in redacted_items."""
         redactor = _make_redactor([
             {"text": "555-123-4567", "label": "phone_number", "start": 20, "end": 32, "score": 0.97},
             {"text": "john@example.com", "label": "email", "start": 0, "end": 16, "score": 0.99},
@@ -175,7 +171,7 @@ class TestRedactItems:
 
 class TestRedactPassesConfig:
     def test_custom_threshold_passed_to_model(self):
-        with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
+        with patch("clawguard.redactor.GLiNER") as MockGLiNER:
             mock_model = MagicMock()
             MockGLiNER.from_pretrained.return_value = mock_model
             mock_model.predict_entities.return_value = []
@@ -187,7 +183,7 @@ class TestRedactPassesConfig:
         assert threshold == 0.8
 
     def test_custom_model_id_used(self):
-        with patch("nemoclaw.redactor.GLiNER") as MockGLiNER:
+        with patch("clawguard.redactor.GLiNER") as MockGLiNER:
             MockGLiNER.from_pretrained.return_value = MagicMock()
             PIIRedactor(model_id="custom/model")
             MockGLiNER.from_pretrained.assert_called_once_with("custom/model")

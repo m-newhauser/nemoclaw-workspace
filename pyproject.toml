@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nemoclaw"
-version = "0.2.0"
-description = "PII redaction service for OpenClaw using nvidia/gliner-PII"
+name = "clawguard"
+version = "0.1.0"
+description = "Local PII redaction service for OpenClaw using nvidia/gliner-PII"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 dependencies = [
@@ -13,6 +13,9 @@ dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
 ]
+
+[project.scripts]
+clawguard = "clawguard.cli:serve"
 
 [project.optional-dependencies]
 dev = [

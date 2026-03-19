@@ -63,7 +63,6 @@ class PIIRedactor:
         raw_entities = self._model.predict_entities(text, self.labels, threshold=self.threshold)
         entities = _resolve_overlaps(raw_entities)
 
-        # Single-pass left-to-right reconstruction — O(n+m), no index-shift bugs.
         parts: list[str] = []
         cursor = 0
         redacted_items: list[dict] = []
